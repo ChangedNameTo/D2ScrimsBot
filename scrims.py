@@ -1,9 +1,11 @@
 import sqlite3
 import discord
+import datetime
 
 from discord.ext import commands
 from secrets import *
 
+from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
 
 conn = sqlite3.connect("scrims.db")
@@ -24,7 +26,7 @@ async def on_ready():
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
 async def create(ctx, time, teamsize):
-    time = string_to_date(time)
+    time = string_to_datetime(time)
     creator = ctx.author
     c.execute('INSERT INTO Scrims (playing, teamsize, creator) VALUES(?, ?, ?);', (time, int(teamsize), str(creator)))
     nextscrim = c.lastrowid
@@ -53,8 +55,40 @@ async def create(ctx, time, teamsize):
 
     await ctx.send(content=None, embed=embed)
 
-from string_to_date import string_to_date
-from datetime import datetime
+@bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
+async def list(ctx, time):
+    creator = ctx.author
+
+    time = string_to_date(time)
+    higher_time = time + datetime.timedelta(1)
+
+    c.execute('SELECT gameid, playing from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
+    data = c.fetchall()
+
+    for _data in data:
+        gameid = _data[0]
+        game_time = datetime.datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
+        # Embed creation
+        title = 'New Scrim: ' + str(gameid)
+        color = 0xFFFFFF
+        desc = 'Type `?join <id>` to join this scrim.'
+        embed = discord.Embed(title=title, description=desc, color=color)
+
+        # Player Iteration
+        c.execute('SELECT name from ScrimPlayers WHERE scrim  = ?;', (int(gameid),))
+        rows = c.fetchall()
+        counter = 1
+        players = ""
+        for row in rows:
+            player = "%d. %s\n" % (counter, row[0])
+            players = players + player
+            counter = counter + 1
+
+        embed.add_field(name='Time: ', value=game_time.strftime('%e-%b-%Y %H:%M'), inline=True)
+        embed.add_field(name='Creator: ', value=creator, inline=True)
+        embed.add_field(name='Players: ', value=players, inline=False)
+        await ctx.send(content=None, embed=embed)
+
 
 client = discord.Client()
 @client.event

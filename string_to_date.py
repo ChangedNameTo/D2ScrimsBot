@@ -22,46 +22,24 @@ days = {
 }
 
 date_formats = [
-    '%e/%m/%Y %H:%M', #1/01/1995 23:30
-    '%e-%m-%Y %H:%M', #1-01-1995 23:30
-    '%d/%m/%Y %H:%M', #01/01/1995 23:30
-    '%d-%m-%Y %H:%M', #01-01-1995 23:30
-    '%Y/%m/%e %H:%M', #1995/01/01 23:30
-    '%Y/%m/%d %H:%M', #1995/01/1 23:30
+    '%e/%m/%Y', #1/01/1995
+    '%e-%m-%Y', #1-01-1995
+    '%d/%m/%Y', #01/01/1995
+    '%d-%m-%Y', #01-01-1995
+    '%Y/%m/%e', #1995/01/01
+    '%Y/%m/%d', #1995/01/1
 
-    '%e-%b-%Y %H:%M', #1-Oct-1995 23:30
-    '%e %b %Y %H:%M', #1 Oct 1995 23:30
-    '%b-%e-%Y %H:%M', #Oct-1-1995 23:30
-    '%b %e %Y %H:%M', #Oct 1 1995 23:30
+    '%e-%b-%Y', #1-Oct-1995
+    '%e %b %Y', #1 Oct 1995
+    '%b-%e-%Y', #Oct-1-1995
+    '%b %e %Y', #Oct 1 1995
 
-    '%d-%b-%Y %H:%M', #01-Oct-1995 23:30
-    '%d %b %Y %H:%M', #01 Oct 1995 23:30
-    '%b-%d-%Y %H:%M', #Oct-01-1995 23:30
-    '%b %d %Y %H:%M', #Oct 01 1995 23:30
-
-    '%e/%m/%Y %H%M', #1/01/1995 2330
-    '%e-%m-%Y %H%M', #1-01-1995 2330
-    '%d/%m/%Y %H%M', #01/01/1995 2330
-    '%d-%m-%Y %H%M', #01-01-1995 2330
-    '%Y/%m/%e %H%M', #1995/01/01 2330
-    '%Y/%m/%d %H%M', #1995/01/1 2330
-
-    '%e-%b-%Y %H%M', #1-Oct-1995 2330
-    '%e %b %Y %H%M', #1 Oct 1995 2330
-    '%b-%e-%Y %H%M', #Oct-1-1995 2330
-    '%b %e %Y %H%M', #Oct 1 1995 2330
-
-    '%d-%b-%Y %H%M', #01-Oct-1995 2330
-    '%d %b %Y %H%M', #01 Oct 1995 2330
-    '%b-%d-%Y %H%M', #Oct-01-1995 2330
-    '%b %d %Y %H%M', #Oct 01 1995 2330
-
+    '%d-%b-%Y', #01-Oct-1995
+    '%d %b %Y', #01 Oct 1995
+    '%b-%d-%Y', #Oct-01-1995
+    '%b %d %Y', #Oct 01 1995
 ]
 
-time_formats = [
-    '%H%M',
-    '%H:%M',
-]
 def string_to_date(input):
     for date_format in date_formats:
         try:
@@ -102,7 +80,7 @@ def parse_string(input):
         else:
             relevant_day = None
 
-    return {'suffix': relevant_suffix, 'day': relevant_day, 'time': split[0]}
+    return {'suffix': relevant_suffix, 'day': relevant_day,}
 
 def parsed_string_to_date(parsed_string):
     today = datetime.now()
@@ -118,20 +96,10 @@ def parsed_string_to_date(parsed_string):
     if parsed_string['suffix'] is not None:
         new_date += dt.timedelta(suffixes[parsed_string['suffix']])
 
-
-    for time_format in time_formats:
-        try:
-            new_time = datetime.strptime(parsed_string['time'], time_format)
-            new_date = new_date.replace(hour=new_time.hour, minute=new_time.minute, second=new_time.second)
-            break
-        except:
-            new_time = None
-    if new_time is None:
-        raise Exception('Invalid time')
-
+    new_date = new_date.replace(hour=0, minute=0, second=0, microsecond=0)
     return new_date
 
 if __name__ == '__main__':
-    date = '23:30 tomorrow'
+    date = 'next tuesday'
 
     print(string_to_date(date))
