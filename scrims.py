@@ -62,12 +62,13 @@ async def list(ctx, time):
     time = string_to_date(time)
     higher_time = time + datetime.timedelta(1)
 
-    c.execute('SELECT gameid, playing from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
+    c.execute('SELECT gameid, playing, creator from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
     data = c.fetchall()
 
     for _data in data:
         gameid = _data[0]
         game_time = datetime.datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
+        creator = _data[2]
         # Embed creation
         title = 'New Scrim: ' + str(gameid)
         color = 0xFFFFFF
