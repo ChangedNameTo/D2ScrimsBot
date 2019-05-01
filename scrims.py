@@ -65,6 +65,13 @@ async def list(ctx, time):
     c.execute('SELECT gameid, playing, creator from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
     data = c.fetchall()
 
+    if len(data) == 0:
+        # Embed creation
+        title = 'No scrims scheduled for {}'.format(time.date())
+        color = 0xFFFFFF
+        embed = discord.Embed(title=title, color=color)
+        await ctx.send(content=None, embed=embed)
+
     for _data in data:
         gameid = _data[0]
         game_time = datetime.datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
@@ -85,7 +92,7 @@ async def list(ctx, time):
             players = players + player
             counter = counter + 1
 
-        embed.add_field(name='Time: ', value=game_time.strftime('%e-%b-%Y %H:%M'), inline=True)
+        embed.add_field(name='Time: ', value=game_time.strftime('%e-%b-%Y %H:%M')+('GMT'), inline=True)
         embed.add_field(name='Creator: ', value=creator, inline=True)
         embed.add_field(name='Players: ', value=players, inline=False)
         await ctx.send(content=None, embed=embed)
