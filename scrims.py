@@ -4,6 +4,8 @@ import discord
 from discord.ext import commands
 from secrets import *
 
+from string_to_date import string_to_date
+
 conn = sqlite3.connect("scrims.db")
 c    = conn.cursor()
 
@@ -15,13 +17,14 @@ async def on_ready():
     print('Logged in as')
     print(bot.user.name)
     print(bot.user.id)
-    c.execute('CREATE TABLE IF NOT EXISTS Scrims (gameid INTEGER PRIMARY KEY AUTOINCREMENT, playing TEXT, teamsize INTEGER, creator TEXT);')
+    c.execute('CREATE TABLE IF NOT EXISTS Scrims (gameid INTEGER PRIMARY KEY AUTOINCREMENT, playing DATETIME, teamsize INTEGER, creator TEXT);')
     c.execute('CREATE TABLE IF NOT EXISTS ScrimPlayers (name TEXT, scrim INTEGER, FOREIGN KEY(scrim) REFERENCES Scrims(gameid));')
     conn.commit()
     print('------')
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
 async def create(ctx, time, teamsize):
+    time = string_to_date(time)
     creator = ctx.author
     c.execute('INSERT INTO Scrims (playing, teamsize, creator) VALUES(?, ?, ?);', (time, int(teamsize), str(creator)))
     nextscrim = c.lastrowid
@@ -44,10 +47,28 @@ async def create(ctx, time, teamsize):
         players = players + player
         counter = counter + 1
 
-    embed.add_field(name='Time: ', value=time, inline=True)
+    embed.add_field(name='Time: ', value=time.strftime('%e-%b-%Y %H:%M'), inline=True)
     embed.add_field(name='Creator: ', value=creator, inline=True)
     embed.add_field(name='Players: ', value=players, inline=False)
 
     await ctx.send(content=None, embed=embed)
+
+from string_to_date import string_to_date
+from datetime import datetime
+
+client = discord.Client()
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+    if message.content == "Hello":
+        channel = message.channel
+        await channel.send("World")
+    else:
+        try:
+            return_message = string_to_date(message.content).strftime('%e-%b-%Y %H:%M')
+            await message.channel.send(return_message)
+        except:
+            pass
 
 bot.run(token)
