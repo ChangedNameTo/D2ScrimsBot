@@ -1,9 +1,6 @@
 import datetime as dt
 from datetime import datetime
 
-x = print(datetime.now().time().strftime("%H:%M:%S"))
-
-
 suffixes = {
     'next': 7,
     'coming': 7,
@@ -75,7 +72,9 @@ def string_to_date(input):
     if return_date is None:
         try:
             parsed_string = parse_string(input)
+            print(parsed_string)
             new_date = parsed_string_to_date(parsed_string)
+            print(new_date)
             return_date = new_date
         except Exception as e:
             print(e)
@@ -119,17 +118,20 @@ def parsed_string_to_date(parsed_string):
     if parsed_string['suffix'] is not None:
         new_date += dt.timedelta(suffixes[parsed_string['suffix']])
 
+
     for time_format in time_formats:
         try:
             new_time = datetime.strptime(parsed_string['time'], time_format)
             new_date = new_date.replace(hour=new_time.hour, minute=new_time.minute, second=new_time.second)
             break
         except:
-            raise Exception('Invalid time')
+            new_time = None
+    if new_time is None:
+        raise Exception('Invalid time')
 
     return new_date
 
 if __name__ == '__main__':
-    date = 'tomorrow 23:30'
+    date = '23:30 tomorrow'
 
     print(string_to_date(date))
