@@ -65,6 +65,7 @@ async def list(ctx, time):
     c.execute('SELECT gameid, playing, creator from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
     data = c.fetchall()
 
+    # Send not scrims card if data is empty.
     if len(data) == 0:
         # Embed creation
         title = 'No scrims scheduled for {}'.format(time.date())
