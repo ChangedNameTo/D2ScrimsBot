@@ -1,15 +1,19 @@
 import sqlite3
 import discord
-import datetime
+import json
+import requests
 
 from discord.ext import commands
 from secrets import *
+from util import *
+from datetime import datetime
 
 from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
 
-conn = sqlite3.connect("scrims.db")
-c    = conn.cursor()
+conn     = sqlite3.connect("scrims.db")
+c        = conn.cursor()
+base_url = 'https://www.bungie.net/Platform'
 
 description = 'A bot for the creation of D2 scrims'
 bot = commands.Bot(command_prefix='?', description=description)
@@ -18,11 +22,10 @@ bot = commands.Bot(command_prefix='?', description=description)
 async def on_ready():
     print('Logged in as')
     print(bot.user.name)
-    print(bot.user.id)
     c.execute('CREATE TABLE IF NOT EXISTS Scrims (gameid INTEGER PRIMARY KEY AUTOINCREMENT, playing DATETIME, teamsize INTEGER, creator TEXT);')
     c.execute('CREATE TABLE IF NOT EXISTS ScrimPlayers (name TEXT, scrim INTEGER, FOREIGN KEY(scrim) REFERENCES Scrims(gameid));')
+    c.execute('CREATE TABLE IF NOT EXISTS Players (psnname TEXT UNIQUE, discordname TEXT);')
     conn.commit()
-    print('------')
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
 async def create(ctx, time, teamsize):
@@ -98,20 +101,76 @@ async def list(ctx, time):
         embed.add_field(name='Players: ', value=players, inline=False)
         await ctx.send(content=None, embed=embed)
 
+@bot.command(description='Pulls the most recent private match you played. This is probably a scrim', help="This uses the API, and requires you to have used `?register`. Without it, you will get back an error message.")
+async def match(ctx):
+    creator = ctx.author
 
-client = discord.Client()
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    if message.content == "Hello":
-        channel = message.channel
-        await channel.send("World")
-    else:
-        try:
-            return_message = string_to_date(message.content).strftime('%e-%b-%Y %H:%M')
-            await message.channel.send(return_message)
-        except:
-            pass
+    # Player Iteration
+    c.execute('SELECT psnname from Players WHERE discordname  = ?;', (str(creator),))
+    player = c.fetchall()[0][0]
+
+    if player == None:
+        await ctx.send('You are not registered. Please register with `?register`.')
+
+    # Get user id by PSN
+    search_user = '/Destiny2/SearchDestinyPlayer/2/' + player + '/'
+    r           = json.loads(requests.get(base_url + search_user, headers = headers).content)
+
+    d2_membership_id = r['Response'][0]['membershipId']
+
+    profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
+    r         = json.loads(requests.get(base_url + profile, headers = headers).content)
+    characters = r['Response']['profile']['data']['characterIds']
+
+    instances = []
+
+    for character in characters:
+        matches = '/Destiny2/2/Account/' + d2_membership_id + '/Character/' + character + '/Stats/Activities/?mode=32&count=1'
+        r       = json.loads(requests.get(base_url + matches, headers = headers).content)
+        if 'activities' in r['Response']:
+            for match in r['Response']['activities']:
+                date     = match['period']
+                mode     = modes_dict[match['activityDetails']['mode']]
+                map_name = maps_dict[match['activityDetails']['referenceId']]
+                instance = match['activityDetails']['instanceId']
+
+                activity_url = '/Destiny2/Stats/PostGameCarnageReport/' + instance
+                r            = json.loads(requests.get(base_url + activity_url, headers = headers).content)
+
+                # Creates the match embed
+                title = 'Scrim Post Game Report for : ' + str(creator)
+                color = 0xFFFFFF
+                desc  = mode + ' on ' + map_name
+                embed = discord.Embed(title=title, description=desc, color=color)
+
+                dateobject = datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
+                date       = dateobject.strftime('%m-%d-%Y')
+                embed.add_field(name='Time: ', value=date, inline=True)
+
+                players_table = ""
+                # Get the players and their individual stats
+                players = r['Response']['entries']
+                for player in players:
+                    standing = player['standing'] + 1
+                    name    = player['player']['destinyUserInfo']['displayName']
+                    score   = player['values']['score']['basic']['displayValue']
+                    kills   = player['values']['kills']['basic']['displayValue']
+                    deaths  = player['values']['deaths']['basic']['displayValue']
+                    assists = player['values']['assists']['basic']['displayValue']
+                    kdr     = player['values']['killsDeathsRatio']['basic']['displayValue']
+                    new_row = '**' + str(standing) + '.** ' + name + ' - ' + score +  ' (' + kills + '/' + deaths + '/' + assists + ')\n'
+                    players_table = players_table + new_row
+
+                embed.add_field(name='Players: ', value=players_table, inline=False)
+
+                await ctx.send(content=None, embed=embed)
+
+
+@bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
+async def register(ctx, psn):
+    creator = ctx.author
+    c.execute('REPLACE INTO Players (psnname, discordname) VALUES(?, ?);', (psn, str(creator)))
+    conn.commit()
+    await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
 
 bot.run(token)
