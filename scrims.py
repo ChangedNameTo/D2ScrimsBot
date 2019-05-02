@@ -2,11 +2,13 @@ import sqlite3
 import discord
 import json
 import requests
+import sys
+import traceback
 
 from discord.ext import commands
 from secrets import *
 from util import *
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
@@ -83,12 +85,12 @@ async def list(ctx, time):
     creator = ctx.author
 
     time = string_to_date(time)
-    higher_time = time + datetime.timedelta(1)
+    higher_time = time + timedelta(1)
 
     c.execute('SELECT gameid, playing, creator from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
     data = c.fetchall()
 
-    # Send not scrims card if data is empty.
+    # Send no scrims card if data is empty.
     if len(data) == 0:
         # Embed creation
         title = 'No scrims scheduled for {}'.format(time.date())
@@ -98,7 +100,7 @@ async def list(ctx, time):
 
     for _data in data:
         gameid = _data[0]
-        game_time = datetime.datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
+        game_time = datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
         creator = _data[2]
         # Embed creation
         title = 'New Scrim: ' + str(gameid)
@@ -139,9 +141,6 @@ async def join(ctx, scrimid):
     if scrim == None:
         await ctx.send('This is not an active scrim. Create one with `?create`.')
         return
-
-
-
 
 
 @bot.command(description='Pulls the most recent private match you played. This is probably a scrim', help="This uses the API, and requires you to have used `?register`. Without it, you will get back an error message.")
