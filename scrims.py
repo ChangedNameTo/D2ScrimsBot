@@ -122,11 +122,12 @@ async def match(ctx):
     r         = json.loads(requests.get(base_url + profile, headers = headers).content)
     characters = r['Response']['profile']['data']['characterIds']
 
-    instances = []
+    date_instances = {}
 
     for character in characters:
         matches = '/Destiny2/2/Account/' + d2_membership_id + '/Character/' + character + '/Stats/Activities/?mode=32&count=1'
         r       = json.loads(requests.get(base_url + matches, headers = headers).content)
+
         if 'activities' in r['Response']:
             for match in r['Response']['activities']:
                 date     = match['period']
@@ -134,36 +135,46 @@ async def match(ctx):
                 map_name = maps_dict[match['activityDetails']['referenceId']]
                 instance = match['activityDetails']['instanceId']
 
-                activity_url = '/Destiny2/Stats/PostGameCarnageReport/' + instance
-                r            = json.loads(requests.get(base_url + activity_url, headers = headers).content)
-
-                # Creates the match embed
-                title = 'Scrim Post Game Report for : ' + str(creator)
-                color = 0xFFFFFF
-                desc  = mode + ' on ' + map_name
-                embed = discord.Embed(title=title, description=desc, color=color)
-
                 dateobject = datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
-                date       = dateobject.strftime('%m-%d-%Y')
-                embed.add_field(name='Time: ', value=date, inline=True)
+                date_instances[dateobject] = instance
 
-                players_table = ""
-                # Get the players and their individual stats
-                players = r['Response']['entries']
-                for player in players:
-                    standing = player['standing'] + 1
-                    name    = player['player']['destinyUserInfo']['displayName']
-                    score   = player['values']['score']['basic']['displayValue']
-                    kills   = player['values']['kills']['basic']['displayValue']
-                    deaths  = player['values']['deaths']['basic']['displayValue']
-                    assists = player['values']['assists']['basic']['displayValue']
-                    kdr     = player['values']['killsDeathsRatio']['basic']['displayValue']
-                    new_row = '**' + str(standing) + '.** ' + name + ' - ' + score +  ' (' + kills + '/' + deaths + '/' + assists + ')\n'
-                    players_table = players_table + new_row
+    sorted_dates = sorted(date_instances.keys())
+    instance = date_instances[sorted_dates.pop()]
 
-                embed.add_field(name='Players: ', value=players_table, inline=False)
+    if instance == None:
+        await ctx.send('Why the hell are you using this if you dont play private matches')
+        return
 
-                await ctx.send(content=None, embed=embed)
+    activity_url = '/Destiny2/Stats/PostGameCarnageReport/' + instance
+    r            = json.loads(requests.get(base_url + activity_url, headers = headers).content)
+
+    # Creates the match embed
+    title = 'Scrim Post Game Report for : ' + str(creator)
+    color = 0xFFFFFF
+    desc  = mode + ' on ' + map_name
+    embed = discord.Embed(title=title, description=desc, color=color)
+
+    dateobject = datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
+    date       = dateobject.strftime('%m-%d-%Y')
+    embed.add_field(name='Time: ', value=date, inline=True)
+
+    players_table = ""
+    # Get the players and their individual stats
+    players = r['Response']['entries']
+    for player in players:
+        standing = player['standing'] + 1
+        name    = player['player']['destinyUserInfo']['displayName']
+        score   = player['values']['score']['basic']['displayValue']
+        kills   = player['values']['kills']['basic']['displayValue']
+        deaths  = player['values']['deaths']['basic']['displayValue']
+        assists = player['values']['assists']['basic']['displayValue']
+        kdr     = player['values']['killsDeathsRatio']['basic']['displayValue']
+        new_row = '**' + str(standing) + '.** ' + name + ' - ' + score +  ' (' + kills + '/' + deaths + '/' + assists + ')\n'
+        players_table = players_table + new_row
+
+    embed.add_field(name='Players: ', value=players_table, inline=False)
+
+    await ctx.send(content=None, embed=embed)
 
 
 @bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
