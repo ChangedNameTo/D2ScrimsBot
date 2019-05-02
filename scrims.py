@@ -22,10 +22,29 @@ bot = commands.Bot(command_prefix='?', description=description)
 async def on_ready():
     print('Logged in as')
     print(bot.user.name)
-    c.execute('CREATE TABLE IF NOT EXISTS Scrims (gameid INTEGER PRIMARY KEY AUTOINCREMENT, playing DATETIME, teamsize INTEGER, creator TEXT);')
-    c.execute('CREATE TABLE IF NOT EXISTS ScrimPlayers (name TEXT, scrim INTEGER, FOREIGN KEY(scrim) REFERENCES Scrims(gameid));')
-    c.execute('CREATE TABLE IF NOT EXISTS Players (psnname TEXT UNIQUE, discordname TEXT);')
+    c.execute('''CREATE TABLE IF NOT EXISTS Scrims
+            (
+                gameid INTEGER PRIMARY KEY AUTOINCREMENT,
+                playing DATETIME,
+                teamsize INTEGER,
+                creator INTEGER,
+                FOREIGN KEY(creator) REFERENCES Players(rowid)
+            );''')
+    c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
+            (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player TEXT UNIQUE,
+                scrim INTEGER,
+                FOREIGN KEY(scrim) REFERENCES Scrims(gameid)
+            );''')
+    c.execute('''CREATE TABLE IF NOT EXISTS Players
+            (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                psnname TEXT UNIQUE,
+                discordname TEXT
+            );''')
     conn.commit()
+
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
 async def create(ctx, time, teamsize):
@@ -57,6 +76,7 @@ async def create(ctx, time, teamsize):
     embed.add_field(name='Players: ', value=players, inline=False)
 
     await ctx.send(content=None, embed=embed)
+
 
 @bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
 async def list(ctx, time):
@@ -100,6 +120,29 @@ async def list(ctx, time):
         embed.add_field(name='Creator: ', value=creator, inline=True)
         embed.add_field(name='Players: ', value=players, inline=False)
         await ctx.send(content=None, embed=embed)
+
+
+@bot.command(description="Join a scrim with a specific ID", help="Takes a scrim ID. You must be registered using `?register` first.")
+async def join(ctx, scrimid):
+    creator = ctx.author
+
+    c.execute('SELECT psnname FROM Players WHERE discordname = ?', (creator,))
+    player = c.fetchall()[0][0]
+
+    if player == None:
+        await ctx.send('You are not registered. Please register with `?register`.')
+        return
+
+    c.execute('SELECT gameid FROM Scrims WHERE gameid = ?', (scrimid,))
+    scrim = c.fetchall()[0][0]
+
+    if scrim == None:
+        await ctx.send('This is not an active scrim. Create one with `?create`.')
+        return
+
+
+
+
 
 @bot.command(description='Pulls the most recent private match you played. This is probably a scrim', help="This uses the API, and requires you to have used `?register`. Without it, you will get back an error message.")
 async def match(ctx):
@@ -183,5 +226,22 @@ async def register(ctx, psn):
     c.execute('REPLACE INTO Players (psnname, discordname) VALUES(?, ?);', (psn, str(creator)))
     conn.commit()
     await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.NoPrivateMessage):
+        await ctx.send(ctx.message.author, "Um... this command can't be used in private messages.")
+    elif isinstance(error, commands.DisabledCommand):
+        await ctx.send(ctx.message.author, "I'm Sorry. This command is disabled and it can't be used.")
+    elif isinstance(error, commands.CommandInvokeError):
+        print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
+        traceback.print_tb(error.original.__traceback__)
+        print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
+    elif isinstance(error, commands.CommandNotFound):
+        await ctx.send(ctx.message.channel, "It seems you are trying to use a command that does not exist.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("It seems you are missing required argument(s). Try again if you have all the arguments needed.")
+
 
 bot.run(token)
