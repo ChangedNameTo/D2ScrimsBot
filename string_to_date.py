@@ -57,9 +57,7 @@ def string_to_date(input):
     if return_date is None:
         try:
             parsed_string = parse_string(input)
-            print(parsed_string)
             new_date = parsed_string_to_date(parsed_string)
-            print(new_date)
             return_date = new_date
         except Exception as e:
             print(e)
