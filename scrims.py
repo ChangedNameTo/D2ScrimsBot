@@ -4,6 +4,7 @@ import json
 import requests
 import sys
 import traceback
+import random
 
 from discord.ext import commands
 from secrets import *
@@ -26,34 +27,34 @@ async def on_ready():
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 time DATETIME,
-                teamsize INTEGER,
+                team_size INTEGER,
                 creator INTEGER,
-                FOREIGN KEY(creator) REFERENCES Players(rowid)
+                FOREIGN KEY(creator) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                playerid INTEGER,
+                player_id INTEGER,
                 scrimid INTEGER,
                 FOREIGN KEY(scrimid) REFERENCES Scrims(id),
-                FOREIGN KEY(playerid) REFERENCES Players(playerid)
+                FOREIGN KEY(player_id) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS Players
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                psnname TEXT UNIQUE,
-                discordname TEXT
+                psn_name TEXT UNIQUE,
+                discord_name TEXT
             );''')
     conn.commit()
 
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
-async def create(ctx, time, teamsize):
+async def create(ctx, time, team_size):
     time = string_to_datetime(time)
     creator = ctx.author
-    c.execute('''SELECT id, psnname
+    c.execute('''SELECT id, psn_name
                    FROM Players
-                  WHERE discordname = ?''', (str(creator),))
+                  WHERE discord_name = ?''', (str(creator),))
     try:
         row         = c.fetchall()[0]
         creatorid   = row[0]
@@ -63,10 +64,10 @@ async def create(ctx, time, teamsize):
         return
 
 
-    c.execute('''INSERT INTO Scrims (time, teamsize, creator)
-                      VALUES (?, ?, ?);''', (time, int(teamsize), creatorid))
-    nextscrim = c.lastrowid
-    c.execute('''INSERT INTO ScrimPlayers (playerid, scrimid)
+    c.execute('''INSERT INTO Scrims (time, team_size, creator)
+                      VALUES (?, ?, ?);''', (time, int(team_size), creatorid))
+    nextscrim = c.last_row_id
+    c.execute('''INSERT INTO ScrimPlayers (player_id, scrimid)
                       VALUES (?, ?);''', (creatorid, nextscrim))
     conn.commit()
 
@@ -77,9 +78,9 @@ async def create(ctx, time, teamsize):
     embed = discord.Embed(title=title, description=desc, color=color)
 
     # Player Iteration
-    c.execute('''SELECT p.psnname
+    c.execute('''SELECT p.psn_name
                    FROM Players p
-                   JOIN ScrimPlayers sp ON sp.playerid = p.id
+                   JOIN ScrimPlayers sp ON sp.player_id = p.id
                   WHERE sp.scrimid = ?;''', (int(nextscrim),))
     rows = c.fetchall()
     counter = 1
@@ -91,7 +92,7 @@ async def create(ctx, time, teamsize):
 
     embed.add_field(name='Time: ', value=time.strftime('%e-%b-%Y %H:%M'), inline=True)
     embed.add_field(name='Creator: ', value=creatorname, inline=True)
-    embed.add_field(name='Team Size: ', value=teamsize, inline=True)
+    embed.add_field(name='Team Size: ', value=team_size, inline=True)
     embed.add_field(name='Players: ', value=players, inline=False)
 
     await ctx.send(content=None, embed=embed)
@@ -148,16 +149,16 @@ async def join(ctx, scrimid):
     # Get the player ID
     c.execute('''SELECT id
                    FROM Players
-                  WHERE discordname = ?;''', (str(creator),))
+                  WHERE discord_name = ?;''', (str(creator),))
 
     try:
-        playerid = c.fetchall()[0][0]
+        player_id = c.fetchall()[0][0]
     except IndexError:
         await ctx.send('You are not registered. Please register with `?register`.')
         return
 
     # Get the scrim ID
-    c.execute('''SELECT id, teamsize
+    c.execute('''SELECT id, team_size
                    FROM Scrims
                   WHERE id = ?;''', (scrimid,))
     try:
@@ -181,7 +182,7 @@ async def join(ctx, scrimid):
     c.execute('''SELECT Count(*)
                    FROM ScrimPlayers
                   WHERE scrimid = ?
-                    AND playerid = ?;''', (scrimid,playerid))
+                    AND player_id = ?;''', (scrimid,player_id))
 
     is_here = (c.fetchall()[0][0] != 0)
 
@@ -190,8 +191,8 @@ async def join(ctx, scrimid):
         return
 
     # Join the scrim, doesn't matter if they already did.
-    c.execute('''INSERT INTO ScrimPlayers (playerid, scrimid)
-                       VALUES (?, ?);''', (playerid, scrimid))
+    c.execute('''INSERT INTO ScrimPlayers (player_id, scrimid)
+                       VALUES (?, ?);''', (player_id, scrimid))
     conn.commit()
 
     # Embed creation
@@ -200,7 +201,7 @@ async def join(ctx, scrimid):
     desc = 'Type `?join <id>` to join this scrim.'
     embed = discord.Embed(title=title, description=desc, color=color)
 
-    c.execute('''SELECT p.psnname, s.time
+    c.execute('''SELECT p.psn_name, s.time
                    FROM Players p
                    JOIN Scrims s ON s.creator = p.id
                   WHERE s.id = ?;''', (scrimid,))
@@ -210,9 +211,9 @@ async def join(ctx, scrimid):
     time             = creator_and_time[1]
 
     # Player Iteration
-    c.execute('''SELECT p.psnname
+    c.execute('''SELECT p.psn_name
                    FROM Players p
-                   JOIN ScrimPlayers sp ON sp.playerid = p.id
+                   JOIN ScrimPlayers sp ON sp.player_id = p.id
                   WHERE sp.scrimid = ?;''', (int(scrimid),))
     rows = c.fetchall()
     counter = 1
@@ -234,7 +235,7 @@ async def match(ctx):
     creator = ctx.author
 
     # Player Iteration
-    c.execute('SELECT psnname from Players WHERE discordname  = ?;', (str(creator),))
+    c.execute('SELECT psn_name from Players WHERE discord_name  = ?;', (str(creator),))
     player = c.fetchall()[0][0]
 
     if player == None:
@@ -270,7 +271,7 @@ async def match(ctx):
     instance = date_instances[sorted_dates.pop()]
 
     if instance == None:
-        await ctx.send('Why the hell are you using this if you dont play private matches')
+        await ctx.send("Why the hell are you using this if you don't play private matches")
         return
 
     activity_url = '/Destiny2/Stats/PostGameCarnageReport/' + instance
@@ -305,19 +306,90 @@ async def match(ctx):
     await ctx.send(content=None, embed=embed)
 
 
+@bot.command(description='Starts a scrim. Auto creates teams.', help="If you are the creator of a scrim, randomly generates the teams and starts it.")
+async def start(ctx, scrimid):
+    creator = ctx.author
+
+    # Get the scrim ID
+    c.execute('''SELECT id, team_size, creator
+                   FROM Scrims
+                  WHERE id = ?;''', (scrimid,))
+    try:
+        scrim_row = c.fetchall()[0]
+    except IndexError:
+        await ctx.send('This is not an active scrim id. Create one with `?create`.')
+        return
+
+    team_size = scrim_row[1]
+
+    # How many people are already registered for this scrim?
+    c.execute('''SELECT Count(*)
+                   FROM ScrimPlayers
+                  WHERE scrimid = ?;''', (scrimid,))
+
+    player_count = c.fetchall()[0][0]
+
+    if player_count != (team_size * 2):
+        await ctx.send('This scrim is not full. More people need to join with `?join`.')
+        return
+
+    # How many people are already registered for this scrim?
+    c.execute('''SELECT player_id
+                   FROM ScrimPlayers
+                  WHERE scrimid = ?;''', (scrimid,))
+
+    player_row = c.fetchall()
+
+    random.shuffle(player_row)
+    alpha = player_row[0:(team_size - 1)]
+    bravo = player_row[(team_size - 1):]
+
+    # Embed creation
+    title = 'Joined Scrim: ' + str(scrimid)
+    color = 0xFFFFFF
+    desc = 'Type `?join <id>` to join this scrim.'
+    embed = discord.Embed(title=title, description=desc, color=color)
+
+    c.execute('''SELECT p.psn_name, s.time
+                   FROM Players p
+                   JOIN Scrims s ON s.creator = p.id
+                  WHERE s.id = ?;''', (scrimid,))
+
+    creator_and_time = c.fetchall()[0]
+    creatorname      = creator_and_time[0]
+    time             = creator_and_time[1]
+
+    # Player Iteration
+    c.execute('''SELECT p.psn_name
+                   FROM Players p
+                   JOIN ScrimPlayers sp ON sp.player_id = p.id
+                  WHERE sp.scrimid = ?;''', (int(scrimid),))
+    rows = c.fetchall()
+    counter = 1
+    players = ""
+    for row in rows:
+        player = "%d. %s\n" % (counter, row[0])
+        players = players + player
+        counter = counter + 1
+
+    embed.add_field(name='Time: ', value=time, inline=True)
+    embed.add_field(name='Creator: ', value=creatorname, inline=True)
+    embed.add_field(name='Players: ', value=players, inline=False)
+
+    await ctx.send(content=None, embed=embed)
+
+
 @bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
 async def register(ctx, psn):
     creator = ctx.author
-    c.execute('REPLACE INTO Players (psnname, discordname) VALUES(?, ?);', (psn, str(creator)))
+    c.execute('REPLACE INTO Players (psn_name, discord_name) VALUES(?, ?);', (psn, str(creator)))
     conn.commit()
     await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
 
 
 @bot.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.NoPrivateMessage):
-        await ctx.send(ctx.message.author, "Um... this command can't be used in private messages.")
-    elif isinstance(error, commands.DisabledCommand):
+    if isinstance(error, commands.DisabledCommand):
         await ctx.send(ctx.message.author, "I'm Sorry. This command is disabled and it can't be used.")
     elif isinstance(error, commands.CommandInvokeError):
         print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
@@ -328,7 +400,7 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("It seems you are missing required argument(s). Try again if you have all the arguments needed.")
     elif isinstance(error, KeyError):
-        await ctx.send("This is a KeyError cause the devs are idiots. Shoot them a message.")
+        await ctx.send("This is a KeyError cause the developers are idiots. Shoot them a message.")
 
 
 bot.run(token)

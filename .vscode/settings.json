@@ -1,0 +1,9 @@
+{
+    "sqltools.connections": [
+        {
+            "database": "/Users/will/Documents/CS Projects/scrimsbot/scrims.db",
+            "dialect": "SQLite",
+            "name": "Scrims"
+        }
+    ]
+}
