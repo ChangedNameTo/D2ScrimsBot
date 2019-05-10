@@ -24,10 +24,6 @@ base_url = 'https://www.bungie.net/Platform'
 description = 'A bot for the creation of D2 scrims'
 bot         = commands.Bot(command_prefix='?', description=description)
 
-
-with open('DestinyActivityDefinition.json', 'r') as file:
-    DestinyActivityDefinition = json.load(file)
-
 @bot.event
 async def on_ready():
     c.execute('''CREATE TABLE IF NOT EXISTS Scrims
@@ -106,7 +102,7 @@ async def create(ctx, time, team_size):
 
 
 @bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
-async def list(ctx):
+async def list(ctx, data=None):
     creator = ctx.author
 
 
