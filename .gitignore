@@ -129,4 +129,4 @@ secrets.py
 *.swp
 
 # Ignore the scrims db
-*.db
+scrims.db
