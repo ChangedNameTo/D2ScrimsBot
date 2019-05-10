@@ -5,6 +5,9 @@ import requests
 import sys
 import traceback
 import random
+import time
+
+sys.path.append('util/')
 
 from discord.ext import commands
 from secrets import *
@@ -19,7 +22,7 @@ c        = conn.cursor()
 base_url = 'https://www.bungie.net/Platform'
 
 description = 'A bot for the creation of D2 scrims'
-bot = commands.Bot(command_prefix='?', description=description)
+bot         = commands.Bot(command_prefix='?', description=description)
 
 @bot.event
 async def on_ready():
@@ -35,8 +38,8 @@ async def on_ready():
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 player_id INTEGER,
-                scrimid INTEGER,
-                FOREIGN KEY(scrimid) REFERENCES Scrims(id),
+                scrim_id INTEGER,
+                FOREIGN KEY(scrim_id) REFERENCES Scrims(id),
                 FOREIGN KEY(player_id) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS Players
@@ -66,8 +69,8 @@ async def create(ctx, time, team_size):
 
     c.execute('''INSERT INTO Scrims (time, team_size, creator)
                       VALUES (?, ?, ?);''', (time, int(team_size), creatorid))
-    nextscrim = c.last_row_id
-    c.execute('''INSERT INTO ScrimPlayers (player_id, scrimid)
+    nextscrim = c.lastrowid
+    c.execute('''INSERT INTO ScrimPlayers (player_id, scrim_id)
                       VALUES (?, ?);''', (creatorid, nextscrim))
     conn.commit()
 
@@ -81,7 +84,7 @@ async def create(ctx, time, team_size):
     c.execute('''SELECT p.psn_name
                    FROM Players p
                    JOIN ScrimPlayers sp ON sp.player_id = p.id
-                  WHERE sp.scrimid = ?;''', (int(nextscrim),))
+                  WHERE sp.scrim_id = ?;''', (int(nextscrim),))
     rows = c.fetchall()
     counter = 1
     players = ""
@@ -99,35 +102,38 @@ async def create(ctx, time, team_size):
 
 
 @bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
-async def list(ctx, time):
+async def list(ctx):
     creator = ctx.author
 
-    time = string_to_date(time)
-    higher_time = time + datetime.timedelta(1)
-
-    c.execute('SELECT id, playing, creator from Scrims WHERE playing BETWEEN ? AND ?;',(time, higher_time,))
+    c.execute('''SELECT s.id, s.time, p.psn_name
+                   FROM Scrims s
+                   JOIN Players p ON p.id = s.creator
+                  WHERE s.time > date('now');''',())
     data = c.fetchall()
 
     # Send not scrims card if data is empty.
     if len(data) == 0:
         # Embed creation
-        title = 'No scrims scheduled for {}'.format(time.date())
+        title = 'No scrims scheduled in the future. Schedule one now with `?create`'
         color = 0xFFFFFF
         embed = discord.Embed(title=title, color=color)
         await ctx.send(content=None, embed=embed)
 
     for _data in data:
         id = _data[0]
-        game_time = datetime.datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
-        creator = _data[2]
+        game_time = datetime.strptime(_data[1], '%Y-%m-%d %H:%M:%S.%f')
+        creator   = _data[2]
         # Embed creation
         title = 'New Scrim: ' + str(id)
         color = 0xFFFFFF
-        desc = 'Type `?join <id>` to join this scrim.'
+        desc  = 'Type `?join <id>` to join this scrim.'
         embed = discord.Embed(title=title, description=desc, color=color)
 
         # Player Iteration
-        c.execute('SELECT name from ScrimPlayers WHERE scrim  = ?;', (int(id),))
+        c.execute('''SELECT p.psn_name
+                       FROM ScrimPlayers sp
+                       JOIN Players p ON p.id = sp.player_id
+                      WHERE scrim_id  = ?;''', (int(id),))
         rows = c.fetchall()
         counter = 1
         players = ""
@@ -143,7 +149,7 @@ async def list(ctx, time):
 
 
 @bot.command(description="Join a scrim with a specific ID", help="Takes a scrim ID. You must be registered using `?register` first.")
-async def join(ctx, scrimid):
+async def join(ctx, scrim_id):
     creator = ctx.author
 
     # Get the player ID
@@ -160,7 +166,7 @@ async def join(ctx, scrimid):
     # Get the scrim ID
     c.execute('''SELECT id, team_size
                    FROM Scrims
-                  WHERE id = ?;''', (scrimid,))
+                  WHERE id = ?;''', (scrim_id,))
     try:
         scrim_row = c.fetchall()[0]
     except IndexError:
@@ -170,7 +176,7 @@ async def join(ctx, scrimid):
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
                    FROM ScrimPlayers
-                  WHERE scrimid = ?;''', (scrimid,))
+                  WHERE scrim_id = ?;''', (scrim_id,))
 
     player_count = c.fetchall()[0][0]
 
@@ -181,8 +187,8 @@ async def join(ctx, scrimid):
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
                    FROM ScrimPlayers
-                  WHERE scrimid = ?
-                    AND player_id = ?;''', (scrimid,player_id))
+                  WHERE scrim_id = ?
+                    AND player_id = ?;''', (scrim_id,player_id))
 
     is_here = (c.fetchall()[0][0] != 0)
 
@@ -191,12 +197,12 @@ async def join(ctx, scrimid):
         return
 
     # Join the scrim, doesn't matter if they already did.
-    c.execute('''INSERT INTO ScrimPlayers (player_id, scrimid)
-                       VALUES (?, ?);''', (player_id, scrimid))
+    c.execute('''INSERT INTO ScrimPlayers (player_id, scrim_id)
+                       VALUES (?, ?);''', (player_id, scrim_id))
     conn.commit()
 
     # Embed creation
-    title = 'Joined Scrim: ' + str(scrimid)
+    title = 'Joined Scrim: ' + str(scrim_id)
     color = 0xFFFFFF
     desc = 'Type `?join <id>` to join this scrim.'
     embed = discord.Embed(title=title, description=desc, color=color)
@@ -204,7 +210,7 @@ async def join(ctx, scrimid):
     c.execute('''SELECT p.psn_name, s.time
                    FROM Players p
                    JOIN Scrims s ON s.creator = p.id
-                  WHERE s.id = ?;''', (scrimid,))
+                  WHERE s.id = ?;''', (scrim_id,))
 
     creator_and_time = c.fetchall()[0]
     creatorname      = creator_and_time[0]
@@ -214,7 +220,7 @@ async def join(ctx, scrimid):
     c.execute('''SELECT p.psn_name
                    FROM Players p
                    JOIN ScrimPlayers sp ON sp.player_id = p.id
-                  WHERE sp.scrimid = ?;''', (int(scrimid),))
+                  WHERE sp.scrim_id = ?;''', (int(scrim_id),))
     rows = c.fetchall()
     counter = 1
     players = ""
@@ -307,13 +313,13 @@ async def match(ctx):
 
 
 @bot.command(description='Starts a scrim. Auto creates teams.', help="If you are the creator of a scrim, randomly generates the teams and starts it.")
-async def start(ctx, scrimid):
+async def start(ctx, scrim_id):
     creator = ctx.author
 
     # Get the scrim ID
     c.execute('''SELECT id, team_size, creator
                    FROM Scrims
-                  WHERE id = ?;''', (scrimid,))
+                  WHERE id = ?;''', (scrim_id,))
     try:
         scrim_row = c.fetchall()[0]
     except IndexError:
@@ -325,7 +331,7 @@ async def start(ctx, scrimid):
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
                    FROM ScrimPlayers
-                  WHERE scrimid = ?;''', (scrimid,))
+                  WHERE scrim_id = ?;''', (scrim_id,))
 
     player_count = c.fetchall()[0][0]
 
@@ -333,48 +339,50 @@ async def start(ctx, scrimid):
         await ctx.send('This scrim is not full. More people need to join with `?join`.')
         return
 
-    # How many people are already registered for this scrim?
-    c.execute('''SELECT player_id
-                   FROM ScrimPlayers
-                  WHERE scrimid = ?;''', (scrimid,))
+    # Embed creation
+    title = 'Scrim ' + str(scrim_id) + ' beginning now'
+    color = 0xFFFFFF
+    desc = "Join the creator's party unless otherwise specified."
+    embed = discord.Embed(title=title, description=desc, color=color)
+
+    c.execute('''SELECT p.psn_name
+                   FROM Players p
+                   JOIN Scrims s ON s.creator = p.id
+                  WHERE s.id = ?;''', (scrim_id,))
+
+    creator_and_time = c.fetchall()[0]
+    creatorname      = creator_and_time[0]
+    
+    embed.add_field(name='Creator: ', value=creatorname, inline=False)
+
+    # Player Iteration
+    c.execute('''SELECT sp.player_id, p.psn_name
+                   FROM ScrimPlayers sp
+                   JOIN Players p ON p.id = sp.player_id
+                  WHERE sp.scrim_id = ?;''', (scrim_id,))
 
     player_row = c.fetchall()
 
     random.shuffle(player_row)
-    alpha = player_row[0:(team_size - 1)]
-    bravo = player_row[(team_size - 1):]
+    alpha = player_row[:(team_size)]
+    bravo = player_row[(team_size):]
 
-    # Embed creation
-    title = 'Joined Scrim: ' + str(scrimid)
-    color = 0xFFFFFF
-    desc = 'Type `?join <id>` to join this scrim.'
-    embed = discord.Embed(title=title, description=desc, color=color)
-
-    c.execute('''SELECT p.psn_name, s.time
-                   FROM Players p
-                   JOIN Scrims s ON s.creator = p.id
-                  WHERE s.id = ?;''', (scrimid,))
-
-    creator_and_time = c.fetchall()[0]
-    creatorname      = creator_and_time[0]
-    time             = creator_and_time[1]
-
-    # Player Iteration
-    c.execute('''SELECT p.psn_name
-                   FROM Players p
-                   JOIN ScrimPlayers sp ON sp.player_id = p.id
-                  WHERE sp.scrimid = ?;''', (int(scrimid),))
-    rows = c.fetchall()
     counter = 1
-    players = ""
-    for row in rows:
-        player = "%d. %s\n" % (counter, row[0])
-        players = players + player
+    alpha_team = ""
+    for player in alpha:
+        a_player = "%d. %s\n" % (counter, player[1])
+        alpha_team = alpha_team + a_player
+        counter = counter + 1
+    
+    counter = 1
+    bravo_team = ""
+    for player in bravo:
+        b_player = "%d. %s\n" % (counter, player[1])
+        bravo_team = bravo_team + b_player
         counter = counter + 1
 
-    embed.add_field(name='Time: ', value=time, inline=True)
-    embed.add_field(name='Creator: ', value=creatorname, inline=True)
-    embed.add_field(name='Players: ', value=players, inline=False)
+    embed.add_field(name='Alpha: ', value=alpha_team, inline=True)
+    embed.add_field(name='Bravo: ', value=bravo_team, inline=True)
 
     await ctx.send(content=None, embed=embed)
 
