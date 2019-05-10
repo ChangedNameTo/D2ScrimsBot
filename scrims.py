@@ -46,7 +46,14 @@ async def on_ready():
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 psn_name TEXT UNIQUE,
-                discord_name TEXT
+                discord_name TEXT,
+                membership_id TEXT
+            );''')
+    c.execute('''CREATE TABLE IF NOT EXISTS PlayerCharacters
+            (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER,
+                character_id TEXT
             );''')
     conn.commit()
 
@@ -247,15 +254,15 @@ async def match(ctx):
     if player == None:
         await ctx.send('You are not registered. Please register with `?register`.')
 
-    # Get user id by PSN
-    search_user = '/Destiny2/SearchDestinyPlayer/2/' + player + '/'
-    r           = json.loads(requests.get(base_url + search_user, headers = headers).content)
 
-    d2_membership_id = r['Response'][0]['membershipId']
+    c.execute('''SELECT p.membership_id, pc.character_id
+                   FROM Players p
+                   JOIN PlayerCharacters pc ON p.id = pc.player_id
+                  WHERE discord_name  = ?;''', (str(creator),))
 
-    profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
-    r         = json.loads(requests.get(base_url + profile, headers = headers).content)
-    characters = r['Response']['profile']['data']['characterIds']
+    id_rows = c.fetchall()
+    d2_membership_id = id_rows[0][0]
+    characters = [n[1] for n in id_rows]
 
     date_instances = {}
 
@@ -390,9 +397,28 @@ async def start(ctx, scrim_id):
 @bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
 async def register(ctx, psn):
     creator = ctx.author
-    c.execute('REPLACE INTO Players (psn_name, discord_name) VALUES(?, ?);', (psn, str(creator)))
-    conn.commit()
+
+    # Get user id by PSN
+    search_user = '/Destiny2/SearchDestinyPlayer/2/' + psn + '/'
+    r           = json.loads(requests.get(base_url + search_user, headers = headers).content)
+
+    d2_membership_id = r['Response'][0]['membershipId']
+
+    # Saves the ID's in the database to speed up the query
+    c.execute('''REPLACE INTO Players (psn_name, discord_name, membership_id)
+                       VALUES (?, ?, ?);''', (psn, str(creator), d2_membership_id))
+    player_id = c.lastrowid
+    
     await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
+    
+    profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
+    r         = json.loads(requests.get(base_url + profile, headers = headers).content)
+    characters = r['Response']['profile']['data']['characterIds']
+
+    for character in characters: 
+        c.execute('''REPLACE INTO PlayerCharacters (player_id, character_id)
+                           VALUES (?, ?);''', (player_id, character))
+    conn.commit()
 
 
 @bot.event
