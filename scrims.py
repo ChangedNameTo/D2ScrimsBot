@@ -12,7 +12,7 @@ sys.path.append('util/')
 from discord.ext import commands
 from secrets import *
 from util import *
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
@@ -109,8 +109,9 @@ async def create(ctx, time, team_size):
 
 
 @bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
-async def list(ctx):
+async def list(ctx, data=None):
     creator = ctx.author
+
 
     c.execute('''SELECT s.id, s.time, p.psn_name
                    FROM Scrims s
@@ -118,7 +119,7 @@ async def list(ctx):
                   WHERE s.time > date('now');''',())
     data = c.fetchall()
 
-    # Send not scrims card if data is empty.
+    # Send no scrims card if data is empty.
     if len(data) == 0:
         # Embed creation
         title = 'No scrims scheduled in the future. Schedule one now with `?create`'
@@ -169,6 +170,8 @@ async def join(ctx, scrim_id):
     except IndexError:
         await ctx.send('You are not registered. Please register with `?register`.')
         return
+    else:
+        player = player[0][0]
 
     # Get the scrim ID
     c.execute('''SELECT id, team_size
@@ -202,6 +205,8 @@ async def join(ctx, scrim_id):
     if is_here:
         await ctx.send('You already joined this scrim. Leave with `?leave`.')
         return
+    else:
+        assert len(scrim)==1, "Scrim should be unique"
 
     # Join the scrim, doesn't matter if they already did.
     c.execute('''INSERT INTO ScrimPlayers (player_id, scrim_id)
@@ -266,6 +271,7 @@ async def match(ctx):
 
     date_instances = {}
 
+    # Get recent actitivity data for all characters
     for character in characters:
         matches = '/Destiny2/2/Account/' + d2_membership_id + '/Character/' + character + '/Stats/Activities/?mode=32&count=1'
         r       = json.loads(requests.get(base_url + matches, headers = headers).content)
@@ -274,7 +280,7 @@ async def match(ctx):
             for match in r['Response']['activities']:
                 date     = match['period']
                 mode     = modes_dict[match['activityDetails']['mode']]
-                map_name = maps_dict[match['activityDetails']['referenceId']]
+                map_name = DestinyActivityDefinition['{}'.format(match['activityDetails']['referenceId'])]['displayProperties']['name']
                 instance = match['activityDetails']['instanceId']
 
                 dateobject = datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')

@@ -67,3 +67,19 @@ modes_dict = {
     73 : "QP Control",
     74 : "Comp Control"
 }
+if __name__ == '__main__':
+
+    # import requests
+    # from secrets import *
+    import json
+    # base_url = 'https://www.bungie.net/'
+    # manifest = json.loads(requests.get(base_url+'Platform/Destiny2/Manifest', headers=headers).content)
+    #
+    # data = json.loads(requests.get(base_url+'/common/destiny2_content/json/en/aggregate-89d70fba-f402-4c33-a6a2-3cc5f92bdb82.json', headers=headers).content)
+    # data = data['DestinyActivityDefinition']
+    # with open('DestinyActivityDefinition.json', 'w') as outfile:
+    #     json.dump(data, outfile)
+
+    with open('DestinyActivityDefinition.json', 'r') as outfile:
+        data = json.load(outfile)
+        pass
