@@ -127,3 +127,6 @@ secrets.py
 
 # Swap files
 *.swp
+
+# Ignore the scrims db
+*.db

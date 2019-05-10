@@ -7,6 +7,7 @@ maps_dict = {
     778271008 : "Emperor's Respite",
     1448435553 : "Emperor's Respite",
     806094750 : "Javelin-4",
+    1003889713 : "Javelin-4",
     2233665874 : "Eternity",
     3734723183 : "Eternity",
     2262757213 : "Solitude",
@@ -23,6 +24,7 @@ maps_dict = {
     1153409123 : "Convergence",
     1583254851 : "The Fortress",
     1673114595 : "Pacifica",
+    3233852802 : "Pacifica",
     1711620427 : "Legion's Gulch",
     1815340083 : "Equinox"
 }
