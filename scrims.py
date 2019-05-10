@@ -20,6 +20,10 @@ base_url = 'https://www.bungie.net/Platform'
 description = 'A bot for the creation of D2 scrims'
 bot = commands.Bot(command_prefix='?', description=description)
 
+
+with open('DestinyActivityDefinition.json', 'r') as file:
+    DestinyActivityDefinition = json.load(file)
+
 @bot.event
 async def on_ready():
     print('Logged in as')
@@ -32,13 +36,8 @@ async def on_ready():
                 creator INTEGER,
                 FOREIGN KEY(creator) REFERENCES Players(rowid)
             );''')
-    c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
-            (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                player TEXT UNIQUE,
-                scrim INTEGER,
-                FOREIGN KEY(scrim) REFERENCES Scrims(gameid)
-            );''')
+    c.execute(
+        'CREATE TABLE IF NOT EXISTS ScrimPlayers (name TEXT, scrim INTEGER, FOREIGN KEY(scrim) REFERENCES Scrims(gameid));')
     c.execute('''CREATE TABLE IF NOT EXISTS Players
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,20 +127,26 @@ async def list(ctx, time):
 async def join(ctx, scrimid):
     creator = ctx.author
 
-    c.execute('SELECT psnname FROM Players WHERE discordname = ?', (creator,))
-    player = c.fetchall()[0][0]
+    c.execute('SELECT psnname FROM Players WHERE discordname = ?', (creator.__str__(),))
+    player = c.fetchall()
 
     if player == None:
         await ctx.send('You are not registered. Please register with `?register`.')
         return
+    else:
+        player = player[0][0]
 
     c.execute('SELECT gameid FROM Scrims WHERE gameid = ?', (scrimid,))
-    scrim = c.fetchall()[0][0]
+    scrim = c.fetchall()
 
-    if scrim == None:
+
+    if len(scrim) == 0:
         await ctx.send('This is not an active scrim. Create one with `?create`.')
         return
+    else:
+        assert len(scrim)==1, "Scrim should be unique"
 
+        await ctx.send('Trying to add {} to {}'.format(player[0][0], scrim))
 
 @bot.command(description='Pulls the most recent private match you played. This is probably a scrim', help="This uses the API, and requires you to have used `?register`. Without it, you will get back an error message.")
 async def match(ctx):
@@ -166,6 +171,7 @@ async def match(ctx):
 
     date_instances = {}
 
+    # Get recent actitivity data for all characters
     for character in characters:
         matches = '/Destiny2/2/Account/' + d2_membership_id + '/Character/' + character + '/Stats/Activities/?mode=32&count=1'
         r       = json.loads(requests.get(base_url + matches, headers = headers).content)
@@ -174,7 +180,7 @@ async def match(ctx):
             for match in r['Response']['activities']:
                 date     = match['period']
                 mode     = modes_dict[match['activityDetails']['mode']]
-                map_name = maps_dict[match['activityDetails']['referenceId']]
+                map_name = DestinyActivityDefinition['{}'.format(match['activityDetails']['referenceId'])]['displayProperties']['name']
                 instance = match['activityDetails']['instanceId']
 
                 dateobject = datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
@@ -184,7 +190,7 @@ async def match(ctx):
     instance = date_instances[sorted_dates.pop()]
 
     if instance == None:
-        await ctx.send('Why the hell are you using this if you dont play private matches')
+        await ctx.send("Why the hell are you using this if you don't play private matches")
         return
 
     activity_url = '/Destiny2/Stats/PostGameCarnageReport/' + instance
