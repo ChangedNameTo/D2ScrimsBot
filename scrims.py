@@ -109,15 +109,27 @@ async def create(ctx, time, team_size):
 
 
 @bot.command(description="Lists all scrims occuring on date", help="Takes a semantic date. Put date in double quotes")
-async def list(ctx, data=None):
+async def list(ctx, time_string=None):
     creator = ctx.author
 
+    # check if time_string given. If so, parse time.
+    if time_string is not None:
+        time = string_to_date(time_string)
+        higher_time = time + timedelta(1)
 
-    c.execute('''SELECT s.id, s.time, p.psn_name
-                   FROM Scrims s
-                   JOIN Players p ON p.id = s.creator
-                  WHERE s.time > date('now');''',())
-    data = c.fetchall()
+        c.execute('''SELECT s.id, s.time, p.psn_name 
+                      FROM Scrims s
+                      JOIN Players p ON p.id = s.creator
+                      WHERE s.time 
+                      BETWEEN ? AND ?;''', (time, higher_time,))
+        data = c.fetchall()
+
+    else:
+        c.execute('''SELECT s.id, s.time, p.psn_name
+                       FROM Scrims s
+                       JOIN Players p ON p.id = s.creator
+                      WHERE s.time > date('now');''',())
+        data = c.fetchall()
 
     # Send no scrims card if data is empty.
     if len(data) == 0:
