@@ -187,8 +187,6 @@ async def join(ctx, scrim_id):
     except IndexError:
         await ctx.send('You are not registered. Please register with `?register`.')
         return
-    else:
-        player = player[0][0]
 
     # Get the scrim ID
     c.execute('''SELECT id, team_size
@@ -222,8 +220,6 @@ async def join(ctx, scrim_id):
     if is_here:
         await ctx.send('You already joined this scrim. Leave with `?leave`.')
         return
-    else:
-        assert len(scrim)==1, "Scrim should be unique"
 
     # Join the scrim, doesn't matter if they already did.
     c.execute('''INSERT INTO ScrimPlayers (player_id, scrim_id)
