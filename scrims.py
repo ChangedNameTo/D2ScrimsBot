@@ -6,6 +6,7 @@ import sys
 import traceback
 import random
 import time
+import re
 
 sys.path.append('util/')
 
@@ -32,6 +33,8 @@ async def on_ready():
                 time DATETIME,
                 team_size INTEGER,
                 creator INTEGER,
+                alpha INTEGER DEFAULT 0,
+                bravo INTEGER DEFAULT 0,
                 FOREIGN KEY(creator) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
@@ -47,7 +50,8 @@ async def on_ready():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 psn_name TEXT UNIQUE,
                 discord_name TEXT,
-                membership_id TEXT
+                membership_id TEXT,
+                elo INTEGER DEFAULT 1500
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS PlayerCharacters
             (
@@ -67,18 +71,18 @@ async def create(ctx, time, team_size):
                   WHERE discord_name = ?''', (str(creator),))
     try:
         row         = c.fetchall()[0]
-        creatorid   = row[0]
-        creatorname = row[1]
+        creator_id   = row[0]
+        creator_name = row[1]
     except IndexError:
         await ctx.send('You need to register first using the `?register` command.')
         return
 
 
     c.execute('''INSERT INTO Scrims (time, team_size, creator)
-                      VALUES (?, ?, ?);''', (time, int(team_size), creatorid))
+                      VALUES (?, ?, ?);''', (time, int(team_size), creator_id))
     nextscrim = c.lastrowid
     c.execute('''INSERT INTO ScrimPlayers (player_id, scrim_id)
-                      VALUES (?, ?);''', (creatorid, nextscrim))
+                      VALUES (?, ?);''', (creator_id, nextscrim))
     conn.commit()
 
     # Embed creation
@@ -101,7 +105,7 @@ async def create(ctx, time, team_size):
         counter = counter + 1
 
     embed.add_field(name='Time: ', value=time.strftime('%e-%b-%Y %H:%M'), inline=True)
-    embed.add_field(name='Creator: ', value=creatorname, inline=True)
+    embed.add_field(name='Creator: ', value=creator_name, inline=True)
     embed.add_field(name='Team Size: ', value=team_size, inline=True)
     embed.add_field(name='Players: ', value=players, inline=False)
 
@@ -110,7 +114,6 @@ async def create(ctx, time, team_size):
 
 @bot.command(description="Lists all scrims scheduled, or scrims scheduled for a day if a date is passed.", help="Works "
         "with or without an argument. Without an argument, lists all scrims schedule from present time; scrims scheduled for that day are listed")
-
 async def list(ctx, time_string=None):
     creator = ctx.author
 
@@ -119,10 +122,10 @@ async def list(ctx, time_string=None):
         time = string_to_date(time_string)
         higher_time = time + timedelta(1)
 
-        c.execute('''SELECT s.id, s.time, p.psn_name 
+        c.execute('''SELECT s.id, s.time, p.psn_name
                       FROM Scrims s
                       JOIN Players p ON p.id = s.creator
-                      WHERE s.time 
+                      WHERE s.time
                       BETWEEN ? AND ?;''', (time, higher_time,))
         data = c.fetchall()
 
@@ -285,7 +288,7 @@ async def match(ctx):
 
     date_instances = {}
 
-    # Get recent actitivity data for all characters
+    # Get recent activity data for all characters
     for character in characters:
         matches = '/Destiny2/2/Account/' + d2_membership_id + '/Character/' + character + '/Stats/Activities/?mode=32&count=1'
         r       = json.loads(requests.get(base_url + matches, headers = headers).content)
@@ -369,7 +372,7 @@ async def start(ctx, scrim_id):
     # Embed creation
     title = 'Scrim ' + str(scrim_id) + ' beginning now'
     color = 0xFFFFFF
-    desc = "Join the creator's party unless otherwise specified."
+    desc  = "Join the creator's party unless otherwise specified."
     embed = discord.Embed(title=title, description=desc, color=color)
 
     c.execute('''SELECT p.psn_name
@@ -379,7 +382,7 @@ async def start(ctx, scrim_id):
 
     creator_and_time = c.fetchall()[0]
     creatorname      = creator_and_time[0]
-    
+
     embed.add_field(name='Creator: ', value=creatorname, inline=False)
 
     # Player Iteration
@@ -400,7 +403,7 @@ async def start(ctx, scrim_id):
         a_player = "%d. %s\n" % (counter, player[1])
         alpha_team = alpha_team + a_player
         counter = counter + 1
-    
+
     counter = 1
     bravo_team = ""
     for player in bravo:
@@ -408,10 +411,88 @@ async def start(ctx, scrim_id):
         bravo_team = bravo_team + b_player
         counter = counter + 1
 
-    embed.add_field(name='Alpha: ', value=alpha_team, inline=True)
-    embed.add_field(name='Bravo: ', value=bravo_team, inline=True)
+    embed.add_field(name='Alpha Team: ', value=alpha_team, inline=True)
+    embed.add_field(name='Bravo Team: ', value=bravo_team, inline=True)
+    embed.add_field(name='Score: ', value='Alpha 0 - 0 Bravo', inline=False)
 
-    await ctx.send(content=None, embed=embed)
+    message = await ctx.send(content=None, embed=embed)
+
+    emojis = ["{}\N{COMBINING ENCLOSING KEYCAP}".format(num) for num in range(1, 3)]
+
+    # Adds the scorekeeping reactions
+    for emoji in emojis:
+        await message.add_reaction(emoji)
+
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    # Is this even an embed?
+    if(len(reaction.message.embeds) == 0):
+        return
+
+    # We only care if this embed is a scrim match record
+    embed = reaction.message.embeds[0]
+    r     = re.compile('Start ')
+
+    if(r.match(embed.title)):
+        return
+
+    # Get the match ID
+    r        = re.compile(' (\d) ')
+    scrim_id = r.findall(embed.title)[0]
+
+    c.execute('''SELECT p.discord_name, s.alpha, s.bravo
+                   FROM Scrims s
+                   JOIN Players p ON p.id = s.creator
+                  WHERE s.id = ?;''', (scrim_id,))
+
+    scrim_row = c.fetchall()[0]
+    creator   = scrim_row[0]
+    alpha     = scrim_row[1]
+    bravo     = scrim_row[2]
+
+    reactants = [(i.name+'#'+i.discriminator) for i in await reaction.users().flatten()]
+
+    if(creator in reactants):
+        # Get the emoji and update the score
+        # Alpha won
+        if reaction.emoji == '1⃣':
+            alpha = alpha + 1
+        # Bravo won
+        else:
+            bravo = bravo + 1
+
+        c.execute('''UPDATE Scrims
+                        SET alpha = ?,
+                            bravo = ?
+                      WHERE id = ?;''', (alpha, bravo, scrim_id))
+
+        embed.set_field_at(3, name='Score: ', value='Alpha '+str(alpha)+' - '+str(bravo) + ' Bravo', inline=False)
+
+        # Checks for a winner
+        winner = False
+        if(alpha == 3):
+            winner = 'Alpha'
+        elif(bravo == 3):
+            winner = 'Bravo'
+
+        await reaction.message.edit(embed=embed)
+        await reaction.message.clear_reactions()
+
+        # If a team wins the scrim, updates the team elo's
+        if(winner):
+            # TO-DO: ELO update happens here
+            print(winner + ' has won the scrim.')
+        else:
+            # Edit the old message
+            emojis = ["{}\N{COMBINING ENCLOSING KEYCAP}".format(num) for num in range(1, 3)]
+
+            # Adds the scorekeeping reactions
+            for emoji in emojis:
+                await reaction.message.add_reaction(emoji)
+    else:
+        if(user.name+'#'+user.discriminator != 'Destiny2 Scrims Groups#8958'):
+            await reaction.remove(user)
 
 
 @bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
@@ -428,14 +509,14 @@ async def register(ctx, psn):
     c.execute('''REPLACE INTO Players (psn_name, discord_name, membership_id)
                        VALUES (?, ?, ?);''', (psn, str(creator), d2_membership_id))
     player_id = c.lastrowid
-    
+
     await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
-    
+
     profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
     r         = json.loads(requests.get(base_url + profile, headers = headers).content)
     characters = r['Response']['profile']['data']['characterIds']
 
-    for character in characters: 
+    for character in characters:
         c.execute('''REPLACE INTO PlayerCharacters (player_id, character_id)
                            VALUES (?, ?);''', (player_id, character))
     conn.commit()

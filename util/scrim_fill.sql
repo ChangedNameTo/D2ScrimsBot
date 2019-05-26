@@ -3,5 +3,5 @@ INSERT INTO
 VALUES
   (
     2,
-    5
+    1
   );
