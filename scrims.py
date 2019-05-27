@@ -28,8 +28,9 @@ k_value  = 15
 description = 'A bot for the creation of D2 scrims'
 bot         = commands.Bot(command_prefix='?', description=description)
 
-token = os.environ['token']
-headers = {'X-API-Key' : os.environ['bungie_api_key']}
+token = os.environ['TOKEN']
+bungie_key = os.environ['BUNGIE_KEY']
+headers = {'X-API-Key' : bungie_key}
 
 @bot.event
 async def on_ready():
