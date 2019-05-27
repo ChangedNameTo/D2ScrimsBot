@@ -9,14 +9,13 @@ import time
 import re
 import math
 
-sys.path.append('util/')
+sys.path.append('util')
 
 from discord.ext import commands
-from secrets import *
-from util import *
+from secrets import token, headers
+from util import maps_dict, modes_dict
 from datetime import datetime, timedelta
 from statistics import mean
-
 from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
 
@@ -118,7 +117,7 @@ async def create(ctx, time, team_size):
 
 @bot.command(description="Lists all scrims scheduled, or scrims scheduled for a day if a date is passed.", help="Works "
         "with or without an argument. Without an argument, lists all scrims schedule from present time; scrims scheduled for that day are listed")
-async def list(ctx, time_string=None):
+async def scrims(ctx, time_string=None):
     creator = ctx.author
 
     # check if time_string given. If so, parse time.
@@ -490,6 +489,7 @@ async def register(ctx, psn):
         c.execute('''REPLACE INTO PlayerCharacters (player_id, character_id)
                            VALUES (?, ?);''', (player_id, character))
     conn.commit()
+
 
 @bot.event
 async def on_reaction_add(reaction, user):
