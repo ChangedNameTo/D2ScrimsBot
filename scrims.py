@@ -37,6 +37,7 @@ async def on_ready():
                 creator INTEGER,
                 alpha INTEGER DEFAULT 0,
                 bravo INTEGER DEFAULT 0,
+                started BOOLEAN DEFAULT False,
                 FOREIGN KEY(creator) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
@@ -346,7 +347,7 @@ async def start(ctx, scrim_id):
     creator = ctx.author
 
     # Get the scrim ID
-    c.execute('''SELECT id, team_size, creator, alpha, bravo
+    c.execute('''SELECT id, team_size, creator, alpha, bravo, started
                    FROM Scrims
                   WHERE id = ?;''', (scrim_id,))
     try:
@@ -356,6 +357,12 @@ async def start(ctx, scrim_id):
         return
 
     team_size = scrim_row[1]
+    started = scrim_row[5]
+
+    if(started):
+        await ctx.send('This scrim has already started. Create a new one with `?create`.')
+        return
+
 
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
@@ -367,6 +374,13 @@ async def start(ctx, scrim_id):
     if player_count != (team_size * 2):
         await ctx.send('This scrim is not full. More people need to join with `?join`.')
         return
+
+    # Start the scrim officially
+    # Disable this if you are testing
+    c.execute('''UPDATE Scrims
+                    SET started = True
+                  WHERE id = ?''', (scrim_id,))
+    conn.commit()
 
     # Embed creation
     title = 'Scrim ' + str(scrim_id) + ' beginning now'
