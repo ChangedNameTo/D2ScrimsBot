@@ -118,7 +118,6 @@ async def create(ctx, time, team_size):
 
 @bot.command(description="Lists all scrims scheduled, or scrims scheduled for a day if a date is passed.", help="Works "
         "with or without an argument. Without an argument, lists all scrims schedule from present time; scrims scheduled for that day are listed")
-
 async def list(ctx, time_string=None):
     creator = ctx.author
 
@@ -438,6 +437,60 @@ async def start(ctx, scrim_id):
         await message.add_reaction(emoji)
 
 
+@bot.command(description='Lists out the rankings of all active players.', help='Fairly self explanatory.')
+async def ranking(ctx):
+    # We don't care about players that have registered but not played.
+    # We also only want the top 25.
+    c.execute('''SELECT p.elo, p.psn_name
+                   FROM Players p
+                  WHERE p.elo != 1500
+               ORDER BY p.elo DESC
+                  LIMIT 25;''')
+    player_rows = c.fetchall()
+
+    title = 'Scrim Player ELO Rankings'
+    color = 0xFFFFFF
+    desc  = "Top 25 players in order of ranking. Players who have not played yet are hidden."
+    embed = discord.Embed(title=title, description=desc, color=color)
+
+    counter = 1
+    rankings = ""
+    for player in player_rows:
+        player_rank = "%d. (%s) %s\n" % (counter, player[0], player[1])
+        rankings = rankings + player_rank
+        counter = counter + 1
+
+    embed.add_field(name='Rankings: ', value=rankings, inline=True)
+
+    await ctx.send(content=None, embed=embed)
+
+
+@bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
+async def register(ctx, psn):
+    creator = ctx.author
+
+    # Get user id by PSN
+    search_user = '/Destiny2/SearchDestinyPlayer/2/' + psn + '/'
+    r           = json.loads(requests.get(base_url + search_user, headers = headers).content)
+
+    d2_membership_id = r['Response'][0]['membershipId']
+
+    # Saves the ID's in the database to speed up the query
+    c.execute('''REPLACE INTO Players (psn_name, discord_name, membership_id)
+                       VALUES (?, ?, ?);''', (psn, str(creator), d2_membership_id))
+    player_id = c.lastrowid
+
+    await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
+
+    profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
+    r         = json.loads(requests.get(base_url + profile, headers = headers).content)
+    characters = r['Response']['profile']['data']['characterIds']
+
+    for character in characters:
+        c.execute('''REPLACE INTO PlayerCharacters (player_id, character_id)
+                           VALUES (?, ?);''', (player_id, character))
+    conn.commit()
+
 @bot.event
 async def on_reaction_add(reaction, user):
     # Is this even an embed?
@@ -555,33 +608,6 @@ async def on_reaction_add(reaction, user):
     else:
         if(user.name+'#'+user.discriminator != 'Destiny2 Scrims Groups#8958'):
             await reaction.remove(user)
-
-
-@bot.command(description='Registers your PSN with your Discord', help="Takes your psn name as the psn argument.")
-async def register(ctx, psn):
-    creator = ctx.author
-
-    # Get user id by PSN
-    search_user = '/Destiny2/SearchDestinyPlayer/2/' + psn + '/'
-    r           = json.loads(requests.get(base_url + search_user, headers = headers).content)
-
-    d2_membership_id = r['Response'][0]['membershipId']
-
-    # Saves the ID's in the database to speed up the query
-    c.execute('''REPLACE INTO Players (psn_name, discord_name, membership_id)
-                       VALUES (?, ?, ?);''', (psn, str(creator), d2_membership_id))
-    player_id = c.lastrowid
-
-    await ctx.send('`Registered %s with the PSN as %s. If this was done in error use ?register again.`' % (creator, psn))
-
-    profile   = '/Destiny2/2/Profile/' + d2_membership_id + '/?components=100'
-    r         = json.loads(requests.get(base_url + profile, headers = headers).content)
-    characters = r['Response']['profile']['data']['characterIds']
-
-    for character in characters:
-        c.execute('''REPLACE INTO PlayerCharacters (player_id, character_id)
-                           VALUES (?, ?);''', (player_id, character))
-    conn.commit()
 
 
 @bot.event
