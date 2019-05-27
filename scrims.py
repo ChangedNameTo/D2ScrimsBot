@@ -70,9 +70,12 @@ async def on_ready():
             );''')
     conn.commit()
 
+    print('Bot is ready and live')
+
 
 @bot.command(description='Creates a scrim', help="Takes your name as the host argument, put your time in double quotes. There is no validation.")
 async def create(ctx, time, team_size):
+    print('Scrim created by ' + ctx.author)
     time = string_to_datetime(time)
     creator = ctx.author
     c.execute('''SELECT id, psn_name
@@ -124,6 +127,7 @@ async def create(ctx, time, team_size):
 @bot.command(description="Lists all scrims scheduled, or scrims scheduled for a day if a date is passed.", help="Works "
         "with or without an argument. Without an argument, lists all scrims schedule from present time; scrims scheduled for that day are listed")
 async def scrims(ctx, time_string=None):
+    print('Scrims listed by ' + ctx.author)
     creator = ctx.author
 
     # check if time_string given. If so, parse time.
@@ -184,6 +188,7 @@ async def scrims(ctx, time_string=None):
 
 @bot.command(description="Join a scrim with a specific ID", help="Takes a scrim ID. You must be registered using `?register` first.")
 async def join(ctx, scrim_id):
+    print('Match joined by ' + ctx.author)
     creator = ctx.author
 
     # Get the player ID
@@ -272,6 +277,7 @@ async def join(ctx, scrim_id):
 
 @bot.command(description='Pulls the most recent private match you played. This is probably a scrim', help="This uses the API, and requires you to have used `?register`. Without it, you will get back an error message.")
 async def match(ctx):
+    print('Match requested by ' + ctx.author)
     creator = ctx.author
 
     # Player Iteration
@@ -350,6 +356,7 @@ async def match(ctx):
 @bot.command(description='Starts a scrim. Auto creates teams.', help="If you are the creator of a scrim, randomly generates the teams and starts it.")
 async def start(ctx, scrim_id):
     creator = ctx.author
+    print('Start given by ' + ctx.author)
 
     # Get the scrim ID
     c.execute('''SELECT id, team_size, creator, alpha, bravo, started
