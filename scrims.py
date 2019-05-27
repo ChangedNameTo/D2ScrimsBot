@@ -7,6 +7,7 @@ import traceback
 import random
 import time
 import re
+import math
 
 sys.path.append('util/')
 
@@ -14,6 +15,7 @@ from discord.ext import commands
 from secrets import *
 from util import *
 from datetime import datetime, timedelta
+from statistics import mean
 
 from string_to_datetime import string_to_datetime
 from string_to_date import string_to_date
@@ -21,6 +23,7 @@ from string_to_date import string_to_date
 conn     = sqlite3.connect("scrims.db")
 c        = conn.cursor()
 base_url = 'https://www.bungie.net/Platform'
+k_value  = 15
 
 description = 'A bot for the creation of D2 scrims'
 bot         = commands.Bot(command_prefix='?', description=description)
@@ -394,10 +397,18 @@ async def start(ctx, scrim_id):
     # Grabs every other person in order of elo. Updates the ScrimPlayers afterwards to allow for proper scorekeeping afterwards.
     alpha = player_row[::2]
     bravo = player_row[1::2]
-    c.execute('''UPDATE ScrimPlayers
-                    SET team = 1
-                  WHERE sp.player_id
-    ;''')
+
+    alpha_ids = [x[0] for x in alpha]
+    bravo_ids = [x[0] for x in bravo]
+
+    for player in alpha_ids:
+        c.execute('''UPDATE ScrimPlayers
+                        SET team = 1
+                      WHERE player_id = ?;''', (player,))
+    for player in bravo_ids:
+        c.execute('''UPDATE ScrimPlayers
+                        SET team = 2
+                      WHERE player_id = ?;''', (player,))
 
     counter = 1
     alpha_team = ""
@@ -482,18 +493,56 @@ async def on_reaction_add(reaction, user):
         await reaction.message.clear_reactions()
 
         # If a team wins the scrim, updates the team elo's
-        # TO-DO: ELO update happens here
         if(winner):
             # First get all of the ELOs
+            c.execute('''SELECT p.id, p.psn_name, p.elo
+                        FROM ScrimPlayers sp
+                        JOIN Players p ON p.id = sp.player_id
+                        WHERE sp.scrim_id = ?
+                          AND team = 1
+                    ORDER BY p.elo DESC;''', (scrim_id,))
+            alpha_row = c.fetchall()
+            c.execute('''SELECT p.id, p.psn_name, p.elo
+                        FROM ScrimPlayers sp
+                        JOIN Players p ON p.id = sp.player_id
+                        WHERE sp.scrim_id = ?
+                          AND team = 2
+                    ORDER BY p.elo DESC;''', (scrim_id,))
+            bravo_row = c.fetchall()
+
+            rating_alpha = mean([x[2] for x in alpha_row])
+            rating_bravo = mean([x[2] for x in bravo_row])
 
             # This is the expected odds of winning for each team
             expected_alpha = 1 / ( 1 + 10**( ( rating_bravo - rating_alpha ) / 400 ) )
             expected_bravo = 1 / ( 1 + 10**( ( rating_alpha - rating_bravo ) / 400 ) )
 
-            mom_multiplier = math.log(abs(int(alpha) - int(bravo)) + 1)
-            corr_coeff     = 2.2 / ((rating_away - rating_home) * 0.001 + 2.2)
+            mov_multiplier = math.log(abs(int(alpha) - int(bravo)) + 1)
 
-            # Margin of Victory Multiplier
+            if(alpha == 3):
+                corr_coefficient = 2.2 / ((rating_alpha - rating_bravo) * 0.001 + 2.2)
+            else:
+                corr_coefficient = 2.2 / ((rating_bravo - rating_alpha) * 0.001 + 2.2)
+
+            # Calculates the modifiers
+            alpha_modifier = k_value * (alpha - expected_alpha) * mov_multiplier * corr_coefficient
+            bravo_modifier = k_value * (bravo - expected_bravo) * mov_multiplier * corr_coefficient
+
+            # Updates the ELO's for all players
+            for player in alpha_row:
+                new_elo = int(player[2] + alpha_modifier)
+                player_id = player[0]
+                c.execute('''UPDATE Players
+                                SET elo = ?
+                              WHERE id = ?;''', (new_elo,player_id))
+            conn.commit()
+            for player in bravo_row:
+                new_elo = int(player[2] + bravo_modifier)
+                player_id = player[0]
+                c.execute('''UPDATE Players
+                                SET elo = ?
+                              WHERE id = ?;''', (new_elo,player_id))
+            conn.commit()
 
         else:
             # Edit the old message
