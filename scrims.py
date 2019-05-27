@@ -42,6 +42,7 @@ async def on_ready():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 player_id INTEGER,
                 scrim_id INTEGER,
+                team INTEGER,
                 FOREIGN KEY(scrim_id) REFERENCES Scrims(id),
                 FOREIGN KEY(player_id) REFERENCES Players(id)
             );''')
@@ -382,16 +383,21 @@ async def start(ctx, scrim_id):
     embed.add_field(name='Creator: ', value=creatorname, inline=False)
 
     # Player Iteration
-    c.execute('''SELECT sp.player_id, p.psn_name
+    c.execute('''SELECT sp.player_id, p.psn_name, p.elo
                    FROM ScrimPlayers sp
                    JOIN Players p ON p.id = sp.player_id
-                  WHERE sp.scrim_id = ?;''', (scrim_id,))
+                  WHERE sp.scrim_id = ?
+               ORDER BY p.elo DESC;''', (scrim_id,))
 
     player_row = c.fetchall()
 
-    random.shuffle(player_row)
-    alpha = player_row[:(team_size)]
-    bravo = player_row[(team_size):]
+    # Grabs every other person in order of elo. Updates the ScrimPlayers afterwards to allow for proper scorekeeping afterwards.
+    alpha = player_row[::2]
+    bravo = player_row[1::2]
+    c.execute('''UPDATE ScrimPlayers
+                    SET team = 1
+                  WHERE sp.player_id
+    ;''')
 
     counter = 1
     alpha_team = ""
@@ -476,9 +482,19 @@ async def on_reaction_add(reaction, user):
         await reaction.message.clear_reactions()
 
         # If a team wins the scrim, updates the team elo's
+        # TO-DO: ELO update happens here
         if(winner):
-            # TO-DO: ELO update happens here
-            print(winner + ' has won the scrim.')
+            # First get all of the ELOs
+
+            # This is the expected odds of winning for each team
+            expected_alpha = 1 / ( 1 + 10**( ( rating_bravo - rating_alpha ) / 400 ) )
+            expected_bravo = 1 / ( 1 + 10**( ( rating_alpha - rating_bravo ) / 400 ) )
+
+            mom_multiplier = math.log(abs(int(alpha) - int(bravo)) + 1)
+            corr_coeff     = 2.2 / ((rating_away - rating_home) * 0.001 + 2.2)
+
+            # Margin of Victory Multiplier
+
         else:
             # Edit the old message
             emojis = ["{}\N{COMBINING ENCLOSING KEYCAP}".format(num) for num in range(1, 3)]
