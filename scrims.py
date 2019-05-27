@@ -12,7 +12,7 @@ import math
 sys.path.append('util')
 
 from discord.ext import commands
-from secrets import token, headers
+# from secrets import token, headers
 from util import maps_dict, modes_dict
 from datetime import datetime, timedelta
 from statistics import mean
@@ -26,6 +26,9 @@ k_value  = 15
 
 description = 'A bot for the creation of D2 scrims'
 bot         = commands.Bot(command_prefix='?', description=description)
+
+token = os.environ['token']
+headers = {'X-API-Key' : os.environ['bungie_api_key']}
 
 @bot.event
 async def on_ready():
