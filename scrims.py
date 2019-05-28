@@ -42,7 +42,7 @@ async def on_ready():
                 creator INTEGER,
                 alpha INTEGER DEFAULT 0,
                 bravo INTEGER DEFAULT 0,
-                started BOOLEAN DEFAULT False,
+                started INTEGER DEFAULT 0,
                 FOREIGN KEY(creator) REFERENCES Players(id)
             );''')
     c.execute('''CREATE TABLE IF NOT EXISTS ScrimPlayers
@@ -212,10 +212,6 @@ async def join(ctx, scrim_id):
         await ctx.send('This is not an active scrim id. Create one with `?create`.')
         return
 
-    if(player_id != scrim_row[2]):
-        await ctx.send('You are not the creator of this scrim. Let them start it.')
-        return
-
 
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
@@ -373,13 +369,23 @@ async def start(ctx, scrim_id):
         await ctx.send('This is not an active scrim id. Create one with `?create`.')
         return
 
+    creator = ctx.author
+    c.execute('''SELECT id
+                   FROM Players
+                  WHERE discord_name = ?''', (str(creator),))
+
+    player_id = c.fetchall()[0][0]
+
+    if(player_id != scrim_row[2]):
+        await ctx.send('You are not the creator of this scrim. Let them start it.')
+        return
+
     team_size = scrim_row[1]
     started   = scrim_row[5]
 
-    if(started == False):
+    if(started > 0):
         await ctx.send('This scrim has already started. Create a new one with `?create`.')
         return
-
 
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
