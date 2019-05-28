@@ -1,11 +1,11 @@
 import json
 
-with open('DestinyActivityDefinition.json', 'r') as file:
+with open('./util/DestinyActivityDefinition.json', 'r') as file:
     full_dict = json.load(file)
 
-def map_name(key, dict=full_dict, *args, **kwargs):
+def map_name(key, activity_dict=full_dict, *args, **kwargs):
 
-    activity = dict['{}'.format(key)]
+    activity = activity_dict['{}'.format(key)]
     map_name = activity['displayProperties']['name']
 
     return map_name
