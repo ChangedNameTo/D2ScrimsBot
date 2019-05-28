@@ -10,7 +10,7 @@ import time
 import re
 import math
 
-sys.path.append('util')
+sys.path.append('util/')
 
 from discord.ext import commands
 from util import maps_dict, modes_dict
@@ -27,9 +27,9 @@ k_value  = 15
 description = 'A bot for the creation of D2 scrims'
 bot         = commands.Bot(command_prefix='?', description=description)
 
-# from secrets import token, bungie_key
-token = os.environ['TOKEN']
-bungie_key = os.environ['BUNGIE_KEY']
+from secrets import token, bungie_key
+# token = os.environ['TOKEN']
+# bungie_key = os.environ['BUNGIE_KEY']
 headers = {'X-API-Key' : bungie_key}
 
 @bot.event
@@ -203,7 +203,7 @@ async def join(ctx, scrim_id):
         return
 
     # Get the scrim ID
-    c.execute('''SELECT id, team_size
+    c.execute('''SELECT id, team_size, creator
                    FROM Scrims
                   WHERE id = ?;''', (scrim_id,))
     try:
@@ -211,6 +211,11 @@ async def join(ctx, scrim_id):
     except IndexError:
         await ctx.send('This is not an active scrim id. Create one with `?create`.')
         return
+
+    if(player_id != scrim_row[2]):
+        await ctx.send('You are not the creator of this scrim. Let them start it.')
+        return
+
 
     # How many people are already registered for this scrim?
     c.execute('''SELECT Count(*)
@@ -369,9 +374,9 @@ async def start(ctx, scrim_id):
         return
 
     team_size = scrim_row[1]
-    started = scrim_row[5]
+    started   = scrim_row[5]
 
-    if(started):
+    if(started == False):
         await ctx.send('This scrim has already started. Create a new one with `?create`.')
         return
 
@@ -390,7 +395,7 @@ async def start(ctx, scrim_id):
     # Start the scrim officially
     # Disable this if you are testing
     c.execute('''UPDATE Scrims
-                    SET started = True
+                    SET started = 1
                   WHERE id = ?''', (scrim_id,))
     conn.commit()
 
@@ -451,7 +456,7 @@ async def start(ctx, scrim_id):
 
     embed.add_field(name='Alpha Team: ', value=alpha_team, inline=True)
     embed.add_field(name='Bravo Team: ', value=bravo_team, inline=True)
-    embed.add_field(name='Score: ', value='Alpha {} - {} Bravo'.format(scrim_row[-2], scrim_row[-1]), inline=False)
+    embed.add_field(name='Score: ', value='Alpha {} - {} Bravo'.format(scrim_row[3], scrim_row[4]), inline=False)
 
     message = await ctx.send(content=None, embed=embed)
 
